@@ -30,12 +30,19 @@
 static GestureConfig s_cfg;         /* working copy of config */
 static char s_configPath[MAX_PATH];
 static BOOL s_dirty = FALSE;
+static BOOL s_generalInitDone = FALSE; /* guard against EN_CHANGE during init */
 static BOOL s_dialogOpen = FALSE;   /* re-entrancy guard for settings dialog */
 static HINSTANCE s_hInst;
 static HFONT s_hFont = NULL;        /* Segoe UI for modern look */
 static HWND s_engineHwnd = NULL;    /* engine's hidden window for reload messages */
 
 #define WM_RELOAD_CONFIG (WM_USER + 5)
+
+/* Mark a page dirty and enable the PropertySheet Apply button */
+static void MarkDirty(HWND hwndPage) {
+    s_dirty = TRUE;
+    PropSheet_Changed(GetParent(hwndPage), hwndPage);
+}
 
 /* Save config and notify engine to reload */
 static void SaveAndReload(void) {
@@ -323,7 +330,7 @@ static void SetActionFromMenu(HWND hwnd, int menuId, int direction, BOOL isApp) 
         }
     }
 
-    s_dirty = TRUE;
+    MarkDirty(hwnd);
 }
 
 static void ShowActionMenu(HWND hwnd, int direction, BOOL isApp) {
@@ -540,6 +547,7 @@ static INT_PTR CALLBACK GeneralPageProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         CreateCheck(hwnd, "Launch on Windows startup", x, y, 260, sh, IDC_STARTUP_CHECK);
 
         InitGeneralPage(hwnd);
+        s_generalInitDone = TRUE;
 
         /* Fallback: re-center the PropertySheet after pages are created */
         CenterOnScreen(GetParent(hwnd));
@@ -550,7 +558,7 @@ static INT_PTR CALLBACK GeneralPageProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         NMHDR *nm = (NMHDR *)lParam;
         /* Spin control value changed */
         if (nm->code == UDN_DELTAPOS) {
-            s_dirty = TRUE;
+            MarkDirty(hwnd);
         }
         if (nm->code == PSN_APPLY) {
             ReadGeneralPage(hwnd);
@@ -566,7 +574,7 @@ static INT_PTR CALLBACK GeneralPageProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         if (LOWORD(wParam) == IDC_SCROLL_CHECK) {
             BOOL enabled = IsDlgButtonChecked(hwnd, IDC_SCROLL_CHECK) == BST_CHECKED;
             UpdateScrollControls(enabled);
-            s_dirty = TRUE;
+            MarkDirty(hwnd);
         }
         if (LOWORD(wParam) == IDC_TAP_RECORD) {
             char buf[MAX_ACTION_STR] = {0};
@@ -574,7 +582,21 @@ static INT_PTR CALLBACK GeneralPageProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 strncpy(s_cfg.tap_action.configStr, buf, MAX_ACTION_STR - 1);
                 s_cfg.tap_action.type = ACTION_KEYS;
                 SetDlgItemTextA(hwnd, IDC_TAP_EDIT, buf);
-                s_dirty = TRUE;
+                MarkDirty(hwnd);
+            }
+        }
+        if (LOWORD(wParam) == IDC_TRIGGER_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {
+            MarkDirty(hwnd);
+        }
+        if (LOWORD(wParam) == IDC_REVERSE_CHECK || LOWORD(wParam) == IDC_STARTUP_CHECK) {
+            MarkDirty(hwnd);
+        }
+        /* Direct typing in spin edit controls */
+        if (HIWORD(wParam) == EN_CHANGE && s_generalInitDone) {
+            int id = LOWORD(wParam);
+            if (id == IDC_THRESHOLD_SLIDER || id == IDC_DEADZONE_SLIDER ||
+                id == IDC_LOCK_SLIDER || id == IDC_SCROLL_SLIDER) {
+                MarkDirty(hwnd);
             }
         }
         return TRUE;
@@ -977,7 +999,7 @@ static INT_PTR CALLBACK AppsPageProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                 SendDlgItemMessage(hwnd, IDC_APP_LIST, LB_SETCURSEL, s_cfg.numApps - 1, 0);
                 s_selectedApp = s_cfg.numApps - 1;
                 UpdateAppOverridePanel(hwnd);
-                s_dirty = TRUE;
+                MarkDirty(hwnd);
             }
         }
 
@@ -990,7 +1012,7 @@ static INT_PTR CALLBACK AppsPageProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
             RefreshAppList(hwnd);
             s_selectedApp = -1;
             UpdateAppOverridePanel(hwnd);
-            s_dirty = TRUE;
+            MarkDirty(hwnd);
         }
 
         /* App gesture buttons */
@@ -1012,7 +1034,7 @@ static INT_PTR CALLBACK AppsPageProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                     memset(&s_cfg.apps[s_selectedApp].actions[dir], 0, sizeof(KeyAction));
                 }
                 UpdateAppOverridePanel(hwnd);
-                s_dirty = TRUE;
+                MarkDirty(hwnd);
             }
         }
         return TRUE;
@@ -1074,6 +1096,7 @@ void ShowSettingsDialog(HWND parent, const char *configPath) {
         return;
     }
     s_dirty = FALSE;
+    s_generalInitDone = FALSE;
 
     /* Create modern UI font (Segoe UI) */
     if (!s_hFont) {
