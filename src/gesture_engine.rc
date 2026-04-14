@@ -1,0 +1,7 @@
+/* Resource file for Gesture Engine */
+
+/* Visual styles manifest for modern control rendering */
+1 24 "src/gesture_engine.manifest"
+
+/* Application icon */
+100 ICON "icon.ico"

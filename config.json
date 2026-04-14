@@ -1,0 +1,21 @@
+{
+	"settings":	{
+		"trigger_key":	"f24",
+		"tap_action":	"ctrl+lclick",
+		"gesture_threshold":	5,
+		"dead_zone":	5,
+		"scroll_enabled":	true,
+		"scroll_multiplier":	1,
+		"reverse_scroll":	true,
+		"post_release_lock_ms":	100,
+		"launch_on_startup":	true
+	},
+	"defaults":	{
+		"up":	"ctrl+w",
+		"down":	"ctrl+r",
+		"left":	"ctrl+pageup",
+		"right":	"ctrl+pagedown"
+	},
+	"apps":	{
+	}
+}
